@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
 
 :root {
   --paper:      #f4f1ea;   /* warm cream background        */
@@ -31,7 +31,7 @@ body {
 
 h1, h2, h3, .display { font-family: 'Fraunces', Georgia, serif; font-weight: 600; letter-spacing: -.01em; }
 
-.num { font-family: 'IBM Plex Sans', sans-serif; font-variant-numeric: tabular-nums; }
+.num { font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 0; }
 .pos { color: var(--forest); }
 .neg { color: var(--clay); }
 
@@ -46,7 +46,7 @@ input, select { font-family: inherit; font-size: 15px; }
   display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh;
 }
 .brand { font-family: 'Fraunces', serif; font-size: 22px; font-weight: 600; line-height: 1.1; margin-bottom: 26px; }
-.brand small { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: .18em;
+.brand small { display: block; font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: .18em;
   text-transform: uppercase; color: var(--ink-soft); margin-top: 6px; font-weight: 500; }
 .nav-link {
   display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 9px;
@@ -68,7 +68,7 @@ input, select { font-family: inherit; font-size: 15px; }
 .grid { display: grid; gap: 18px; }
 .stat-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 .stat .label { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
-.stat .value { font-family: 'IBM Plex Mono', monospace; font-size: 27px; font-weight: 500; margin-top: 8px; letter-spacing: -.01em; }
+.stat .value { font-family: 'Inter', sans-serif; font-size: 27px; font-weight: 500; margin-top: 8px; letter-spacing: -.01em; }
 .stat .sub { font-size: 12.5px; margin-top: 6px; color: var(--ink-soft); }
 
 /* ---- tables ---- */
@@ -77,8 +77,8 @@ th, td { text-align: right; padding: 10px 12px; border-bottom: 1px solid var(--l
 th:first-child, td:first-child { text-align: left; }
 thead th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
 tbody tr:hover { background: var(--paper); }
-td.num, th.num, .right { font-family: 'IBM Plex Sans', sans-serif; font-variant-numeric: tabular-nums; }
-.cell-input { width: 100%; border: none; background: transparent; text-align: right; font-family: 'IBM Plex Mono', monospace;
+td.num, th.num, .right { font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 0; }
+.cell-input { width: 100%; border: none; background: transparent; text-align: right; font-family: 'Inter', sans-serif;
   font-variant-numeric: tabular-nums; padding: 4px 2px; border-radius: 5px; color: var(--ink); }
 .cell-input:focus { outline: 2px solid var(--forest); background: #fff; }
 
@@ -95,7 +95,7 @@ td.num, th.num, .right { font-family: 'IBM Plex Sans', sans-serif; font-variant-
 .field input, .field select { padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
 .field input:focus, .field select:focus { outline: 2px solid var(--forest); border-color: var(--forest); }
 
-.pill { font-size: 10.5px; font-family: 'IBM Plex Mono', monospace; letter-spacing: .04em; padding: 2px 8px;
+.pill { font-size: 10.5px; font-family: 'Inter', sans-serif; letter-spacing: .04em; padding: 2px 8px;
   border-radius: 20px; background: var(--paper); border: 1px solid var(--line); color: var(--ink-soft); text-transform: uppercase; }
 .pill.liab { background: var(--clay-dim); color: var(--clay); border-color: #e6cdc2; }
 
