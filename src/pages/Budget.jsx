@@ -13,6 +13,8 @@ export default function Budget() {
   const [entries, setEntries] = useState({})  // `${catId}|${monthIso}` -> amount
   const [newCat, setNewCat] = useState('')
   const [sortBy, setSortBy] = useState('default')
+  const [editingId, setEditingId] = useState(null)
+  const [editingName, setEditingName] = useState('')
 
   const monthIso = m => `${year}-${String(m + 1).padStart(2, '0')}-01`
 
@@ -48,6 +50,13 @@ export default function Budget() {
   async function delCat(id) {
     if (!confirm('Delete this category and all its entries?')) return
     await supabase.from('budget_categories').delete().eq('id', id)
+    load()
+  }
+
+  async function renameCat(id) {
+    if (!editingName.trim()) return
+    await supabase.from('budget_categories').update({ name: editingName.trim() }).eq('id', id)
+    setEditingId(null)
     load()
   }
 
@@ -129,7 +138,15 @@ export default function Budget() {
                 const t = rowTotal(c.id), n = rowCount(c.id)
                 return (
                   <tr key={c.id}>
-                    <td style={{ position: 'sticky', left: 0, background: 'var(--card)' }}>{c.name}</td>
+                    <td style={{ position: 'sticky', left: 0, background: 'var(--card)' }}>
+                      {editingId === c.id
+                        ? <input autoFocus value={editingName} onChange={e => setEditingName(e.target.value)}
+                            onBlur={() => renameCat(c.id)}
+                            onKeyDown={e => { if (e.key === 'Enter') renameCat(c.id); if (e.key === 'Escape') setEditingId(null) }}
+                            style={{ border: '1px solid var(--forest)', borderRadius: 6, padding: '3px 7px', fontSize: 14, width: '100%' }} />
+                        : <span style={{ cursor: 'pointer' }} title="Click to rename" onClick={() => { setEditingId(c.id); setEditingName(c.name) }}>{c.name}</span>
+                      }
+                    </td>
                     {MONTHS.map((_, m) => {
                       const v = entries[`${c.id}|${monthIso(m)}`]
                       const isCurrent = m === CURRENT_MONTH && year === new Date().getFullYear()
@@ -143,7 +160,7 @@ export default function Budget() {
                     })}
                     <td className={'num ' + (t < 0 ? 'neg' : t > 0 ? 'pos' : '')} style={{ fontWeight: 600 }}>{fmtUSD(t)}</td>
                     <td className="num">{n ? fmtUSD(t / n) : '—'}</td>
-                    <td className="row-actions"><button className="icon-btn" onClick={() => delCat(c.id)}><Trash2 size={14} /></button></td>
+                    <td className="row-actions" style={{ position: 'sticky', right: 0, background: 'var(--card)' }}><button className="icon-btn" onClick={() => delCat(c.id)}><Trash2 size={14} /></button></td>
                   </tr>
                 )
               })}
