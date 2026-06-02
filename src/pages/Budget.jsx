@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { insertOwned, fmtUSD } from '../lib/db'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const CURRENT_MONTH = new Date().getMonth()
 
 export default function Budget() {
   const [year, setYear] = useState(new Date().getFullYear())
   const [cats, setCats] = useState([])
   const [entries, setEntries] = useState({})  // `${catId}|${monthIso}` -> amount
   const [newCat, setNewCat] = useState('')
+  const [sortBy, setSortBy] = useState('default')
 
   const monthIso = m => `${year}-${String(m + 1).padStart(2, '0')}-01`
 
@@ -53,6 +56,15 @@ export default function Budget() {
   const colTotal = m => cats.reduce((s, c) => s + (entries[`${c.id}|${monthIso(m)}`] || 0), 0)
   const grandTotal = cats.reduce((s, c) => s + rowTotal(c.id), 0)
 
+  const sortedCats = [...cats].sort((a, b) => {
+    if (sortBy === 'alpha') return a.name.localeCompare(b.name)
+    if (sortBy.startsWith('month-')) {
+      const m = parseInt(sortBy.split('-')[1])
+      return (entries[`${a.id}|${monthIso(m)}`] || 0) - (entries[`${b.id}|${monthIso(m)}`] || 0)
+    }
+    return 0
+  })
+
   return (
     <>
       <div className="page-head">
@@ -67,6 +79,14 @@ export default function Budget() {
             {![2024, 2025, 2026].includes(year) && [2024, 2025, 2026].map(y => <option key={y}>{y}</option>)}
           </select>
         </div>
+        <div className="field">
+          <label>Sort by</label>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            <option value="default">Default order</option>
+            <option value="alpha">Alphabetical</option>
+            {MONTHS.map((m, i) => <option key={i} value={`month-${i}`}>{m} amount</option>)}
+          </select>
+        </div>
         <div className="spacer" />
         <div className="field" style={{ flex: 2, minWidth: 180 }}>
           <label>New category</label>
@@ -76,26 +96,45 @@ export default function Budget() {
         <button className="btn" onClick={addCat}>Add category</button>
       </div>
 
+      <div className="card card-pad" style={{ marginBottom: 18 }}>
+        <div className="section-title" style={{ marginBottom: 14 }}>Monthly net</div>
+        <div style={{ height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={MONTHS.map((m, i) => ({ month: m, income: Math.max(0, colTotal(i)), expense: Math.min(0, colTotal(i)) }))} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
+              <CartesianGrid stroke="#e0dccf" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6b675e' }} tickLine={false} axisLine={{ stroke: '#e0dccf' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#6b675e' }} tickLine={false} axisLine={false}
+                tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} width={48} />
+              <Tooltip formatter={v => fmtUSD(v)} contentStyle={{ borderRadius: 10, border: '1px solid #e0dccf' }} />
+              <ReferenceLine y={0} stroke="#c0bdb4" />
+              <Bar dataKey="income" fill="#2f6b4f" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+              <Bar dataKey="expense" fill="#b3502f" radius={[0, 0, 4, 4]} isAnimationActive={false} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
       <div className="card">
         <div style={{ overflowX: 'auto' }}>
           <table>
             <thead>
               <tr>
                 <th style={{ position: 'sticky', left: 0, background: 'var(--card)' }}>Category</th>
-                {MONTHS.map(m => <th key={m} className="num">{m}</th>)}
+                {MONTHS.map((m, i) => <th key={m} className="num" style={i === CURRENT_MONTH && year === new Date().getFullYear() ? { background: '#e4ede7', color: '#2f6b4f' } : null}>{m}</th>)}
                 <th className="num">Total</th><th className="num">Avg</th><th></th>
               </tr>
             </thead>
             <tbody>
-              {cats.map(c => {
+              {sortedCats.map(c => {
                 const t = rowTotal(c.id), n = rowCount(c.id)
                 return (
                   <tr key={c.id}>
                     <td style={{ position: 'sticky', left: 0, background: 'var(--card)' }}>{c.name}</td>
                     {MONTHS.map((_, m) => {
                       const v = entries[`${c.id}|${monthIso(m)}`]
+                      const isCurrent = m === CURRENT_MONTH && year === new Date().getFullYear()
                       return (
-                        <td key={m} className="num">
+                        <td key={m} className="num" style={isCurrent ? { background: '#e4ede7' } : null}>
                           <input className="cell-input" inputMode="decimal" defaultValue={v ?? ''}
                             key={`${c.id}-${m}-${year}-${v}`}
                             onBlur={e => { if (e.target.value !== String(v ?? '')) setCell(c.id, m, e.target.value) }} />
@@ -112,7 +151,8 @@ export default function Budget() {
                 <td style={{ fontWeight: 600, position: 'sticky', left: 0, background: 'var(--card)' }}>Monthly net</td>
                 {MONTHS.map((_, m) => {
                   const t = colTotal(m)
-                  return <td key={m} className={'num ' + (t < 0 ? 'neg' : t > 0 ? 'pos' : '')} style={{ fontWeight: 600 }}>{t ? fmtUSD(t) : '—'}</td>
+                  const isCurrent = m === CURRENT_MONTH && year === new Date().getFullYear()
+                  return <td key={m} className={'num ' + (t < 0 ? 'neg' : t > 0 ? 'pos' : '')} style={{ fontWeight: 600, ...(isCurrent ? { background: '#e4ede7' } : {}) }}>{t ? fmtUSD(t) : '—'}</td>
                 })}
                 <td className={'num ' + (grandTotal < 0 ? 'neg' : 'pos')} style={{ fontWeight: 700 }}>{fmtUSD(grandTotal)}</td>
                 <td></td><td></td>
