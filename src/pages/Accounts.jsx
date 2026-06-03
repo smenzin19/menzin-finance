@@ -6,7 +6,7 @@ import { insertOwned, fmtUSD, GROUPS, ACCOUNT_TYPES } from '../lib/db'
 export default function Accounts() {
   const [accounts, setAccounts] = useState([])
   const [latest, setLatest] = useState({})
-  const [form, setForm] = useState({ name: '', account_type: 'checking', group: 'Cash', is_liability: false })
+  const [form, setForm] = useState({ name: '', account_type: 'checking', group: 'Cash', is_liability: false, ownership_pct: 100 })
   const [busy, setBusy] = useState(false)
 
   async function load() {
@@ -25,7 +25,7 @@ export default function Accounts() {
     if (!form.name.trim()) return
     setBusy(true)
     await insertOwned('accounts', { ...form, sort_order: accounts.length })
-    setForm({ name: '', account_type: 'checking', group: 'Cash', is_liability: false })
+    setForm({ name: '', account_type: 'checking', group: 'Cash', is_liability: false, ownership_pct: 100 })
     setBusy(false); load()
   }
 
@@ -82,6 +82,11 @@ export default function Accounts() {
               <option value="no">No</option><option value="yes">Yes</option>
             </select>
           </div>
+          <div className="field" style={{ maxWidth: 90 }}>
+            <label>Ownership %</label>
+            <input type="number" min="1" max="100" value={form.ownership_pct}
+              onChange={e => setForm({ ...form, ownership_pct: Number(e.target.value) })} />
+          </div>
           <button className="btn" disabled={busy} onClick={add}>Add</button>
         </div>
       </div>
@@ -89,7 +94,7 @@ export default function Accounts() {
       <div className="card">
         <div style={{ overflowX: 'auto' }}>
           <table>
-            <thead><tr><th>Account</th><th>Type</th><th>Group</th><th className="num">Latest balance</th><th></th></tr></thead>
+            <thead><tr><th>Account</th><th>Type</th><th>Group</th><th className="num">Own %</th><th className="num">Latest balance</th><th></th></tr></thead>
             <tbody>
               {accounts.map(a => (
                 <tr key={a.id}>
@@ -101,7 +106,12 @@ export default function Accounts() {
                       {GROUPS.map(g => <option key={g}>{g}</option>)}
                     </select>
                   </td>
-                  <td className={'num ' + ((latest[a.id] || 0) < 0 ? 'neg' : '')}>{fmtUSD(latest[a.id])}</td>
+                  <td className="num">
+                    <input className="cell-input" type="number" min="1" max="100" value={a.ownership_pct}
+                      style={{ width: 52, textAlign: 'center' }}
+                      onChange={e => update(a.id, { ownership_pct: Number(e.target.value) })} />
+                  </td>
+                  <td className={'num ' + ((latest[a.id] || 0) < 0 ? 'neg' : '')}>{fmtUSD((latest[a.id] || 0) * (a.ownership_pct / 100))}{a.ownership_pct !== 100 && <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>of {fmtUSD(latest[a.id])}</span>}</td>
                   <td className="row-actions"><button className="icon-btn" onClick={() => archive(a.id)}><Trash2 size={15} /></button></td>
                 </tr>
               ))}
