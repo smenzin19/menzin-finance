@@ -74,6 +74,7 @@ input, select { font-family: inherit; font-size: 15px; }
 /* ---- tables ---- */
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: right; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.num, th.num { min-width: 76px; }
 th:first-child, td:first-child { text-align: left; }
 thead th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
 tbody tr:hover { background: var(--paper); }
