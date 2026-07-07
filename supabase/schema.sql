@@ -59,6 +59,20 @@ create table if not exists public.budget_entries (
   unique (category_id, month)
 );
 
+-- ---------- IMPORTED TRANSACTIONS LOG ----------
+-- Records every transaction applied via CSV import.
+-- The unique constraint prevents the same transaction from being imported twice.
+create table if not exists public.imported_transactions (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users (id) on delete cascade,
+  tx_date     date not null,
+  description text not null,
+  amount      numeric(14,2) not null,
+  imported_at timestamptz not null default now(),
+  unique (user_id, tx_date, description, amount),
+  category   text
+);
+
 -- ---------- CATEGORIZATION RULES ----------
 -- Keyword-based auto-categorization for CSV import.
 -- keywords: comma-separated substrings matched case-insensitively, first match wins.
@@ -97,6 +111,7 @@ order by s.snapshot_date;
 --  ROW-LEVEL SECURITY
 -- =============================================================
 alter table public.accounts               enable row level security;
+alter table public.imported_transactions  enable row level security;
 alter table public.balance_snapshots      enable row level security;
 alter table public.budget_categories      enable row level security;
 alter table public.budget_entries         enable row level security;
@@ -104,6 +119,8 @@ alter table public.categorization_rules   enable row level security;
 
 -- One policy per table covering all actions, scoped to the owner.
 create policy "own rows" on public.accounts
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own rows" on public.imported_transactions
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own rows" on public.balance_snapshots
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

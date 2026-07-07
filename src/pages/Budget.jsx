@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, List } from 'lucide-react'
 import StatementImport from '../components/StatementImport'
 import RulesEditor from '../components/RulesEditor'
+import DrillDown from '../components/DrillDown'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { insertOwned, fmtUSD } from '../lib/db'
@@ -18,6 +19,7 @@ export default function Budget() {
   const [editingName, setEditingName] = useState('')
   const [importing, setImporting] = useState(false)
   const [editingRules, setEditingRules] = useState(false)
+  const [drillDown, setDrillDown] = useState(null)
 
   const monthIso = m => `${year}-${String(m + 1).padStart(2, '0')}-01`
 
@@ -134,7 +136,13 @@ export default function Budget() {
                             onBlur={() => renameCat(c.id)}
                             onKeyDown={e => { if (e.key === 'Enter') renameCat(c.id); if (e.key === 'Escape') setEditingId(null) }}
                             style={{ border: '1px solid var(--forest)', borderRadius: 6, padding: '3px 7px', fontSize: 14, width: '100%' }} />
-                        : <span style={{ cursor: 'pointer' }} title="Click to rename" onClick={() => { setEditingId(c.id); setEditingName(c.name) }}>{c.name}</span>
+                        : <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ cursor: 'pointer' }} title="Click to rename" onClick={() => { setEditingId(c.id); setEditingName(c.name) }}>{c.name}</span>
+                            <button className="icon-btn" style={{ opacity: 0.35, padding: 2 }} title="View transactions"
+                              onClick={e => { e.stopPropagation(); setDrillDown(c.name) }}>
+                              <List size={12} />
+                            </button>
+                          </span>
                       }
                     </td>
                     {MONTHS.map((_, m) => {
@@ -142,9 +150,9 @@ export default function Budget() {
                       const isCurrent = m === CURRENT_MONTH && year === new Date().getFullYear()
                       return (
                         <td key={m} className="num" style={isCurrent ? { background: '#e4ede7' } : null}>
-                          <input className="cell-input" inputMode="decimal" defaultValue={v ?? ''}
+                          <input className="cell-input" inputMode="decimal" defaultValue={v != null ? Math.round(v) : ''}
                             key={`${c.id}-${m}-${year}-${v}`}
-                            onBlur={e => { if (e.target.value !== String(v ?? '')) setCell(c.id, m, e.target.value) }} />
+                            onBlur={e => { if (e.target.value !== (v != null ? String(Math.round(v)) : '')) setCell(c.id, m, e.target.value) }} />
                         </td>
                       )
                     })}
@@ -171,6 +179,7 @@ export default function Budget() {
       {cats.length === 0 && <p className="muted" style={{ textAlign: 'center', marginTop: 24 }}>No categories yet — add one above, or import your spreadsheet from the Net Worth tab.</p>}
       {importing && <StatementImport cats={cats} onClose={() => setImporting(false)} onApplied={() => { setImporting(false); load() }} />}
       {editingRules && <RulesEditor cats={cats} onClose={() => setEditingRules(false)} />}
+      {drillDown && <DrillDown catName={drillDown} year={year} onClose={() => setDrillDown(null)} />}
     </>
   )
 }

@@ -81,18 +81,20 @@ export default function NetWorth() {
         <div style={{ overflowX: 'auto' }}>
           <table>
             <thead>
-              <tr><th>Date</th><th className="num">Total</th>{GROUPS.map(g => <th key={g} className="num">{g}</th>)}<th className="num">Δ</th></tr>
+              <tr><th>Date</th><th className="num">Total</th>{GROUPS.map(g => <th key={g} className="num">{g}</th>)}<th className="num">Δ</th><th className="num">%</th></tr>
             </thead>
             <tbody>
               {[...snaps].reverse().map((s, i, arr) => {
                 const p = arr[i + 1]
                 const d = p ? s.total - p.total : null
+                const pct = p && p.total ? (s.total - p.total) / Math.abs(p.total) : null
                 return (
                   <tr key={s.snapshot_date}>
                     <td>{fmtDate(s.snapshot_date)}</td>
                     <td className="num" style={{ fontWeight: 600 }}>{fmtUSD(s.total)}</td>
                     {GROUPS.map(g => <td key={g} className="num">{fmtUSD(s[g.toLowerCase()])}</td>)}
                     <td className={'num ' + (d > 0 ? 'pos' : d < 0 ? 'neg' : '')}>{d != null ? fmtUSD(d) : '—'}</td>
+                    <td className={'num ' + (pct > 0 ? 'pos' : pct < 0 ? 'neg' : '')}>{pct != null ? fmtPct(pct) : '—'}</td>
                   </tr>
                 )
               })}

@@ -13,11 +13,23 @@ function parseDateToMonthIso(dateStr) {
   return `${y}-${m.padStart(2, '0')}-01`
 }
 
+// Chase CSV: MM/DD/YYYY → YYYY-MM-DD
+function parseDateToISO(dateStr) {
+  const parts = dateStr.split('/')
+  if (parts.length < 3) return null
+  const [m, d, y] = parts
+  if (!m || !d || !y) return null
+  return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+}
+
+export const EXCLUDE_SENTINEL = '__exclude__'
+
 function guessCategory(description, rules, catNames) {
   const lower = description.toLowerCase()
   for (const rule of rules) {
     const keywords = rule.keywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean)
     if (keywords.some(k => k && lower.includes(k))) {
+      if (rule.category === EXCLUDE_SENTINEL) return EXCLUDE_SENTINEL
       return catNames.includes(rule.category) ? rule.category : null
     }
   }
@@ -77,20 +89,52 @@ export default function StatementImport({ cats, onClose, onApplied }) {
     const file = e.target.files[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = ev => {
+    reader.onload = async ev => {
       const parsed = parseChaseCSV(ev.target.result)
       if (!parsed) {
         setError("Could not parse this file. Make sure it's a Chase CSV export.")
         return
       }
+
+      const { data: existing } = await supabase
+        .from('imported_transactions')
+        .select('tx_date, description, amount')
+
+      const seen = new Set((existing || []).map(r => `${r.tx_date}|${r.description}|${r.amount}`))
+
+      // Descriptions that appear in 2+ distinct prior months are recurring
+      const monthsByDesc = {}
+      for (const tx of existing || []) {
+        const month = tx.tx_date?.slice(0, 7)
+        if (!month) continue
+        if (!monthsByDesc[tx.description]) monthsByDesc[tx.description] = new Set()
+        monthsByDesc[tx.description].add(month)
+      }
+      const recurringDescs = new Set(
+        Object.entries(monthsByDesc)
+          .filter(([, months]) => months.size >= 2)
+          .map(([desc]) => desc)
+      )
+
       setError(null)
-      setTransactions(parsed.map((t, i) => ({
-        ...t,
-        _idx: i,
-        monthIso: parseDateToMonthIso(t.date),
-        category: guessCategory(t.desc, rules, catNames),
-        skip: false,
-      })))
+      setTransactions(parsed.map((t, i) => {
+        const txDate = parseDateToISO(t.date)
+        const duplicate = seen.has(`${txDate}|${t.desc}|${t.amount}`)
+        const guessed = guessCategory(t.desc, rules, catNames)
+        const excluded = guessed === EXCLUDE_SENTINEL
+        const recurring = recurringDescs.has(t.desc)
+        return {
+          ...t,
+          _idx: i,
+          txDate,
+          monthIso: parseDateToMonthIso(t.date),
+          category: excluded ? null : guessed,
+          skip: duplicate || excluded,
+          duplicate,
+          excluded,
+          recurring,
+        }
+      }))
     }
     reader.readAsText(file)
   }
@@ -161,12 +205,41 @@ export default function StatementImport({ cats, onClose, onApplied }) {
       )
     }
 
+    // Record applied transactions (with category) to prevent re-import and enable drill-down
+    await supabase.from('imported_transactions').upsert(
+      active.map(t => ({ user_id: user.id, tx_date: t.txDate, description: t.desc, amount: t.amount, category: t.category })),
+      { onConflict: 'user_id,tx_date,description,amount' }
+    )
+
     setBusy(false)
     onApplied()
   }
 
   const needsCatCount = transactions ? transactions.filter(t => !t.skip && !t.category).length : 0
   const activeCount   = transactions ? transactions.filter(t => !t.skip && t.category && t.monthIso).length : 0
+  const dupCount      = transactions ? transactions.filter(t => t.duplicate).length : 0
+  const excludedCount = transactions ? transactions.filter(t => t.excluded).length : 0
+  const recurringCount = transactions ? transactions.filter(t => t.recurring && !t.duplicate && !t.excluded).length : 0
+
+  const summary = transactions
+    ? Object.values(
+        transactions
+          .filter(t => !t.skip && t.category && t.monthIso)
+          .reduce((acc, t) => {
+            if (!acc[t.category]) acc[t.category] = { category: t.category, amount: 0, count: 0 }
+            acc[t.category].amount += t.amount
+            acc[t.category].count++
+            return acc
+          }, {})
+      ).sort((a, b) => a.amount - b.amount)
+    : []
+  const allChecked    = transactions ? transactions.every(t => !t.skip) : false
+  const noneChecked   = transactions ? transactions.every(t => t.skip) : false
+
+  function toggleAll() {
+    const newSkip = !noneChecked ? true : false
+    setTransactions(prev => prev.map(t => ({ ...t, skip: newSkip })))
+  }
 
   function toggleSort(col) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -239,13 +312,36 @@ export default function StatementImport({ cats, onClose, onApplied }) {
                     <AlertCircle size={14} /> {needsCatCount} need a category
                   </span>
                 )}
+                {dupCount > 0 && (
+                  <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                    {dupCount} duplicate{dupCount !== 1 ? 's' : ''} skipped
+                  </span>
+                )}
+                {excludedCount > 0 && (
+                  <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                    {excludedCount} excluded by rule
+                  </span>
+                )}
+                {recurringCount > 0 && (
+                  <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                    ↻ {recurringCount} recurring
+                  </span>
+                )}
               </div>
 
               <div style={{ overflowX: 'auto' }}>
                 <table>
                   <thead>
                     <tr>
-                      <th style={{ width: 32 }}></th>
+                      <th style={{ width: 32 }}>
+                        <input
+                          type="checkbox"
+                          checked={allChecked}
+                          ref={el => { if (el) el.indeterminate = !allChecked && !noneChecked }}
+                          onChange={toggleAll}
+                          title={allChecked ? 'Deselect all' : 'Select all'}
+                        />
+                      </th>
                       <SortHd col="date">Date</SortHd>
                       <SortHd col="desc">Description</SortHd>
                       <SortHd col="amount" className="num">Amount</SortHd>
@@ -267,7 +363,18 @@ export default function StatementImport({ cats, onClose, onApplied }) {
                               <input type="checkbox" checked={!t.skip}
                                 onChange={e => setTxField(idx, 'skip', !e.target.checked)} />
                             </td>
-                            <td style={{ fontSize: 13 }}>{t.date}</td>
+                            <td style={{ fontSize: 13 }}>
+                              {t.date}
+                              {t.duplicate && (
+                                <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--ink-soft)', background: 'var(--line)', borderRadius: 4, padding: '1px 5px' }}>dup</span>
+                              )}
+                              {t.excluded && (
+                                <span style={{ marginLeft: 6, fontSize: 11, color: '#b3502f', background: '#fdf0ec', borderRadius: 4, padding: '1px 5px' }}>excluded</span>
+                              )}
+                              {t.recurring && !t.duplicate && !t.excluded && (
+                                <span style={{ marginLeft: 6, fontSize: 11, color: '#2f6b4f', background: '#e4ede7', borderRadius: 4, padding: '1px 5px' }}>↻ recurring</span>
+                              )}
+                            </td>
                             <td style={{ fontSize: 13, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                               title={t.desc}>{t.desc}</td>
                             <td className={'num ' + (t.amount < 0 ? 'neg' : 'pos')} style={{ fontSize: 13 }}>
@@ -332,6 +439,28 @@ export default function StatementImport({ cats, onClose, onApplied }) {
                   </tbody>
                 </table>
               </div>
+
+              {summary.length > 0 && (
+                <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+                  <div className="section-title" style={{ fontSize: 12, marginBottom: 8 }}>Apply preview</div>
+                  <table style={{ fontSize: 13 }}>
+                    <tbody>
+                      {summary.map(s => (
+                        <tr key={s.category}>
+                          <td style={{ textAlign: 'left', paddingTop: 4, paddingBottom: 4 }}>{s.category}</td>
+                          <td style={{ color: 'var(--ink-soft)', paddingLeft: 16 }}>{s.count} tx</td>
+                          <td className={'num ' + (s.amount < 0 ? 'neg' : 'pos')} style={{ fontWeight: 600, paddingLeft: 16 }}>{fmtUSD(s.amount)}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ borderTop: '1px solid var(--line)' }}>
+                        <td style={{ textAlign: 'left', fontWeight: 600, paddingTop: 6 }}>Total</td>
+                        <td style={{ color: 'var(--ink-soft)', paddingLeft: 16 }}>{activeCount} tx</td>
+                        <td className={'num ' + (summary.reduce((s, r) => s + r.amount, 0) < 0 ? 'neg' : 'pos')} style={{ fontWeight: 700, paddingLeft: 16 }}>{fmtUSD(summary.reduce((s, r) => s + r.amount, 0))}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
                 <button className="btn ghost" onClick={onClose}>Cancel</button>

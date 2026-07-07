@@ -1,7 +1,21 @@
 import { useState, useEffect } from 'react'
-import { X, Trash2, GripVertical } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { insertOwned } from '../lib/db'
+import { EXCLUDE_SENTINEL } from './StatementImport'
+
+const EXCLUDE_LABEL = 'Always exclude'
+
+function CategorySelect({ value, onChange, cats, style }) {
+  return (
+    <select value={value} onChange={onChange} style={style}>
+      <option value={EXCLUDE_SENTINEL}>{EXCLUDE_LABEL}</option>
+      <optgroup label="Assign to category">
+        {cats.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+      </optgroup>
+    </select>
+  )
+}
 
 export default function RulesEditor({ cats, onClose }) {
   const [rules, setRules] = useState([])
@@ -112,17 +126,12 @@ export default function RulesEditor({ cats, onClose }) {
                       />
                     </td>
                     <td>
-                      <select
+                      <CategorySelect
                         style={selectStyle}
                         value={fieldValue(r, 'category')}
+                        cats={cats}
                         onChange={e => { startEdit(r, 'category', e.target.value); commitEdit({ ...r, ...edits[r.id], category: e.target.value }) }}
-                      >
-                        {cats.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                        {/* keep the saved value even if category was deleted */}
-                        {!cats.some(c => c.name === fieldValue(r, 'category')) && (
-                          <option value={r.category}>{r.category}</option>
-                        )}
-                      </select>
+                      />
                     </td>
                     <td>
                       <button className="icon-btn" onClick={() => deleteRule(r.id)}><Trash2 size={14} /></button>
@@ -145,13 +154,12 @@ export default function RulesEditor({ cats, onClose }) {
               placeholder="Keywords, comma-separated"
             />
             <span className="muted" style={{ fontSize: 13 }}>→</span>
-            <select
+            <CategorySelect
               style={selectStyle}
               value={newCategory}
+              cats={cats}
               onChange={e => setNewCategory(e.target.value)}
-            >
-              {cats.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-            </select>
+            />
             <button className="btn" onClick={addRule}>Add</button>
           </div>
         </div>
