@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import StatementImport from '../components/StatementImport'
+import RulesEditor from '../components/RulesEditor'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { insertOwned, fmtUSD } from '../lib/db'
@@ -17,6 +18,7 @@ export default function Budget() {
   const [editingId, setEditingId] = useState(null)
   const [editingName, setEditingName] = useState('')
   const [importing, setImporting] = useState(false)
+  const [editingRules, setEditingRules] = useState(false)
 
   const monthIso = m => `${year}-${String(m + 1).padStart(2, '0')}-01`
 
@@ -105,6 +107,7 @@ export default function Budget() {
             onKeyDown={e => e.key === 'Enter' && addCat()} placeholder="e.g. Groceries" />
         </div>
         <button className="btn" onClick={addCat}>Add category</button>
+        <button className="btn ghost" onClick={() => setEditingRules(true)}>Edit rules</button>
         <button className="btn ghost" onClick={() => setImporting(true)}>↑ Import statement</button>
       </div>
 
@@ -182,7 +185,8 @@ export default function Budget() {
         </div>
       </div>
       {cats.length === 0 && <p className="muted" style={{ textAlign: 'center', marginTop: 24 }}>No categories yet — add one above, or import your spreadsheet from the Net Worth tab.</p>}
-      {importing && <StatementImport cats={cats} year={year} month={CURRENT_MONTH} onClose={() => setImporting(false)} onApplied={() => { setImporting(false); load() }} />}
+      {importing && <StatementImport cats={cats} onClose={() => setImporting(false)} onApplied={() => { setImporting(false); load() }} />}
+      {editingRules && <RulesEditor cats={cats} onClose={() => setEditingRules(false)} />}
     </>
   )
 }

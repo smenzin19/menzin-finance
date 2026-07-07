@@ -59,6 +59,18 @@ create table if not exists public.budget_entries (
   unique (category_id, month)
 );
 
+-- ---------- CATEGORIZATION RULES ----------
+-- Keyword-based auto-categorization for CSV import.
+-- keywords: comma-separated substrings matched case-insensitively, first match wins.
+create table if not exists public.categorization_rules (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  keywords   text not null,
+  category   text not null,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
 -- ---------- INDEXES ----------
 create index if not exists idx_snapshots_user_date on public.balance_snapshots (user_id, snapshot_date);
 create index if not exists idx_entries_user_month  on public.budget_entries (user_id, month);
@@ -84,10 +96,11 @@ order by s.snapshot_date;
 -- =============================================================
 --  ROW-LEVEL SECURITY
 -- =============================================================
-alter table public.accounts          enable row level security;
-alter table public.balance_snapshots enable row level security;
-alter table public.budget_categories enable row level security;
-alter table public.budget_entries    enable row level security;
+alter table public.accounts               enable row level security;
+alter table public.balance_snapshots      enable row level security;
+alter table public.budget_categories      enable row level security;
+alter table public.budget_entries         enable row level security;
+alter table public.categorization_rules   enable row level security;
 
 -- One policy per table covering all actions, scoped to the owner.
 create policy "own rows" on public.accounts
@@ -97,4 +110,6 @@ create policy "own rows" on public.balance_snapshots
 create policy "own rows" on public.budget_categories
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own rows" on public.budget_entries
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own rows" on public.categorization_rules
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
