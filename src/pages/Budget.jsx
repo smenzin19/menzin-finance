@@ -14,7 +14,6 @@ export default function Budget() {
   const [cats, setCats] = useState([])
   const [entries, setEntries] = useState({})  // `${catId}|${monthIso}` -> amount
   const [newCat, setNewCat] = useState('')
-  const [sortBy, setSortBy] = useState('default')
   const [editingId, setEditingId] = useState(null)
   const [editingName, setEditingName] = useState('')
   const [importing, setImporting] = useState(false)
@@ -69,14 +68,7 @@ export default function Budget() {
   const colTotal = m => cats.reduce((s, c) => s + (entries[`${c.id}|${monthIso(m)}`] || 0), 0)
   const grandTotal = cats.reduce((s, c) => s + rowTotal(c.id), 0)
 
-  const sortedCats = [...cats].sort((a, b) => {
-    if (sortBy === 'alpha') return a.name.localeCompare(b.name)
-    if (sortBy.startsWith('month-')) {
-      const m = parseInt(sortBy.split('-')[1])
-      return (entries[`${a.id}|${monthIso(m)}`] || 0) - (entries[`${b.id}|${monthIso(m)}`] || 0)
-    }
-    return 0
-  })
+  const sortedCats = [...cats].sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <>
@@ -92,15 +84,7 @@ export default function Budget() {
             {![2024, 2025, 2026].includes(year) && [2024, 2025, 2026].map(y => <option key={y}>{y}</option>)}
           </select>
         </div>
-        <div className="field">
-          <label>Sort by</label>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
-            <option value="default">Default order</option>
-            <option value="alpha">Alphabetical</option>
-            {MONTHS.map((m, i) => <option key={i} value={`month-${i}`}>{m} amount</option>)}
-          </select>
-        </div>
-        <div className="spacer" />
+<div className="spacer" />
         <div className="field" style={{ flex: 2, minWidth: 180 }}>
           <label>New category</label>
           <input value={newCat} onChange={e => setNewCat(e.target.value)}
