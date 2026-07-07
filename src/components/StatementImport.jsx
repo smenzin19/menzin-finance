@@ -26,11 +26,15 @@ function guessCategory(description, rules, catNames) {
 
 function parseChaseCSV(text) {
   const lines = text.trim().split('\n')
-  const headerIdx = lines.findIndex(l => l.toLowerCase().includes('transaction date'))
+  // Support both credit card format (Transaction Date) and checking format (Posting Date)
+  const headerIdx = lines.findIndex(l => {
+    const lower = l.toLowerCase()
+    return lower.includes('transaction date') || lower.includes('posting date')
+  })
   if (headerIdx === -1) return null
 
   const header = lines[headerIdx].split(',').map(h => h.trim().replace(/"/g, '').toLowerCase())
-  const dateCol = header.findIndex(h => h === 'transaction date')
+  const dateCol = header.findIndex(h => h === 'transaction date' || h === 'posting date')
   const descCol = header.findIndex(h => h === 'description')
   const amtCol  = header.findIndex(h => h === 'amount')
   if (dateCol === -1 || descCol === -1 || amtCol === -1) return null
