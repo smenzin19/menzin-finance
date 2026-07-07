@@ -60,6 +60,8 @@ export default function StatementImport({ cats, onClose, onApplied }) {
   const [editingRules, setEditingRules] = useState(false)
   const [saveRuleFor, setSaveRuleFor] = useState(null)
   const [ruleKeyword, setRuleKeyword] = useState('')
+  const [sortCol, setSortCol] = useState(null)   // 'date' | 'desc' | 'amount' | 'category'
+  const [sortDir, setSortDir] = useState('asc')
   const fileRef = useRef()
 
   const catNames = cats.map(c => c.name)
@@ -82,8 +84,9 @@ export default function StatementImport({ cats, onClose, onApplied }) {
         return
       }
       setError(null)
-      setTransactions(parsed.map(t => ({
+      setTransactions(parsed.map((t, i) => ({
         ...t,
+        _idx: i,
         monthIso: parseDateToMonthIso(t.date),
         category: guessCategory(t.desc, rules, catNames),
         skip: false,
@@ -92,12 +95,12 @@ export default function StatementImport({ cats, onClose, onApplied }) {
     reader.readAsText(file)
   }
 
-  function setTxField(i, field, value) {
-    setTransactions(prev => prev.map((t, idx) => idx === i ? { ...t, [field]: value } : t))
+  function setTxField(idx, field, value) {
+    setTransactions(prev => prev.map(t => t._idx === idx ? { ...t, [field]: value } : t))
   }
 
-  function openSaveRule(i) {
-    const t = transactions[i]
+  function openSaveRule(idx) {
+    const t = transactions.find(t => t._idx === idx)
     const cleaned = t.desc.toLowerCase()
       .replace(/[^a-z0-9\s]/g, '')
       .trim()
@@ -109,7 +112,7 @@ export default function StatementImport({ cats, onClose, onApplied }) {
   }
 
   async function saveRule() {
-    const t = transactions[saveRuleFor]
+    const t = transactions.find(t => t._idx === saveRuleFor)
     if (!ruleKeyword.trim() || !t.category) return
     const { data: { user } } = await supabase.auth.getUser()
     await supabase.from('categorization_rules').insert({
@@ -165,6 +168,33 @@ export default function StatementImport({ cats, onClose, onApplied }) {
   const needsCatCount = transactions ? transactions.filter(t => !t.skip && !t.category).length : 0
   const activeCount   = transactions ? transactions.filter(t => !t.skip && t.category && t.monthIso).length : 0
 
+  function toggleSort(col) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
+  const displayTxs = transactions ? [...transactions].sort((a, b) => {
+    if (!sortCol) return 0
+    let av, bv
+    if (sortCol === 'date')     { av = a.date;     bv = b.date }
+    if (sortCol === 'desc')     { av = a.desc;     bv = b.desc }
+    if (sortCol === 'amount')   { av = a.amount;   bv = b.amount }
+    if (sortCol === 'category') { av = a.category || ''; bv = b.category || '' }
+    if (av < bv) return sortDir === 'asc' ? -1 : 1
+    if (av > bv) return sortDir === 'asc' ? 1 : -1
+    return 0
+  }) : []
+
+  const SortHd = ({ col, children, className }) => {
+    const active = sortCol === col
+    return (
+      <th className={className} onClick={() => toggleSort(col)}
+        style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+        {children} {active ? (sortDir === 'asc' ? '↑' : '↓') : <span style={{ opacity: 0.3 }}>↕</span>}
+      </th>
+    )
+  }
+
   return (
     <>
       <div
@@ -216,25 +246,26 @@ export default function StatementImport({ cats, onClose, onApplied }) {
                   <thead>
                     <tr>
                       <th style={{ width: 32 }}></th>
-                      <th>Date</th>
-                      <th>Description</th>
-                      <th className="num">Amount</th>
-                      <th>Category</th>
+                      <SortHd col="date">Date</SortHd>
+                      <SortHd col="desc">Description</SortHd>
+                      <SortHd col="amount" className="num">Amount</SortHd>
+                      <SortHd col="category">Category</SortHd>
                       <th style={{ width: 32 }}></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions.map((t, i) => {
+                    {displayTxs.map(t => {
+                      const idx = t._idx
                       const needsCat = !t.category
                       return (
-                        <Fragment key={i}>
+                        <Fragment key={idx}>
                           <tr style={{
                             opacity: t.skip ? 0.35 : 1,
                             background: needsCat && !t.skip ? '#fff8f5' : undefined,
                           }}>
                             <td>
                               <input type="checkbox" checked={!t.skip}
-                                onChange={e => setTxField(i, 'skip', !e.target.checked)} />
+                                onChange={e => setTxField(idx, 'skip', !e.target.checked)} />
                             </td>
                             <td style={{ fontSize: 13 }}>{t.date}</td>
                             <td style={{ fontSize: 13, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -245,7 +276,7 @@ export default function StatementImport({ cats, onClose, onApplied }) {
                             <td>
                               <select
                                 value={t.category || ''}
-                                onChange={e => setTxField(i, 'category', e.target.value)}
+                                onChange={e => setTxField(idx, 'category', e.target.value)}
                                 style={{
                                   fontSize: 13,
                                   border: `1px solid ${needsCat && !t.skip ? '#b3502f' : 'var(--line)'}`,
@@ -263,7 +294,7 @@ export default function StatementImport({ cats, onClose, onApplied }) {
                                 <button
                                   className="icon-btn"
                                   title="Save as rule"
-                                  onClick={() => saveRuleFor === i ? setSaveRuleFor(null) : openSaveRule(i)}
+                                  onClick={() => saveRuleFor === idx ? setSaveRuleFor(null) : openSaveRule(idx)}
                                 >
                                   <BookMarked size={13} />
                                 </button>
@@ -271,7 +302,7 @@ export default function StatementImport({ cats, onClose, onApplied }) {
                             </td>
                           </tr>
 
-                          {saveRuleFor === i && (
+                          {saveRuleFor === idx && (
                             <tr style={{ background: '#f0f5f2' }}>
                               <td colSpan={6} style={{ padding: '8px 12px' }}>
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
