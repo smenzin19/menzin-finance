@@ -68,9 +68,25 @@ export default function Budget() {
   const rowTotal = id => MONTHS.reduce((s, _, m) => s + (entries[`${id}|${monthIso(m)}`] || 0), 0)
   const rowCount = id => MONTHS.filter((_, m) => entries[`${id}|${monthIso(m)}`] !== undefined).length
   const colTotal = m => cats.reduce((s, c) => s + (entries[`${c.id}|${monthIso(m)}`] || 0), 0)
+  const colPosTotal = m => cats.reduce((s, c) => { const v = entries[`${c.id}|${monthIso(m)}`] || 0; return v > 0 ? s + v : s }, 0)
+  const colNegTotal = m => cats.reduce((s, c) => { const v = entries[`${c.id}|${monthIso(m)}`] || 0; return v < 0 ? s + v : s }, 0)
   const grandTotal = cats.reduce((s, c) => s + rowTotal(c.id), 0)
+  const grandPosTotal = MONTHS.reduce((s, _, m) => s + colPosTotal(m), 0)
+  const grandNegTotal = MONTHS.reduce((s, _, m) => s + colNegTotal(m), 0)
 
   const sortedCats = [...cats].sort((a, b) => a.name.localeCompare(b.name))
+  const isCurrentYear = year === new Date().getFullYear()
+
+  async function setTarget(catId, raw) {
+    const target = raw === '' ? null : (parseFloat(raw) || 0)
+    setCats(prev => prev.map(c => c.id === catId ? { ...c, monthly_target: target } : c))
+    await supabase.from('budget_categories').update({ monthly_target: target }).eq('id', catId)
+  }
+
+  const spendByCat = sortedCats
+    .map(c => ({ name: c.name, spend: -rowTotal(c.id) }))
+    .filter(c => c.spend > 0)
+    .sort((a, b) => b.spend - a.spend)
 
   return (
     <>
@@ -115,12 +131,32 @@ export default function Budget() {
         </div>
       </div>
 
+      {spendByCat.length > 0 && (
+        <div className="card card-pad" style={{ marginBottom: 18 }}>
+          <div className="section-title" style={{ marginBottom: 14 }}>Spending by category · {year}</div>
+          <div style={{ height: Math.max(160, spendByCat.length * 32) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={spendByCat} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+                <CartesianGrid stroke="#e0dccf" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#6b675e' }} tickLine={false} axisLine={{ stroke: '#e0dccf' }}
+                  tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#1c1b18' }} tickLine={false} axisLine={false} width={130} />
+                <Tooltip formatter={v => fmtUSD(-v)} contentStyle={{ borderRadius: 10, border: '1px solid #e0dccf' }} />
+                <Bar dataKey="spend" fill="#b3502f" radius={[0, 4, 4, 0]} isAnimationActive={false} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <div style={{ overflowX: 'auto' }}>
           <table>
             <thead>
               <tr>
                 <th style={{ position: 'sticky', left: 0, background: 'var(--card)' }}>Category</th>
+                <th className="num">Target</th>
+                {isCurrentYear && <th className="num" style={{ minWidth: 120 }}>Progress</th>}
                 {MONTHS.map((m, i) => <th key={m} className="num" style={i === CURRENT_MONTH && year === new Date().getFullYear() ? { background: '#e4ede7', color: '#2f6b4f' } : null}>{m}</th>)}
                 <th className="num">Total</th><th className="num">Avg</th><th></th>
               </tr>
@@ -128,6 +164,10 @@ export default function Budget() {
             <tbody>
               {sortedCats.map(c => {
                 const t = rowTotal(c.id), n = rowCount(c.id)
+                const target = c.monthly_target
+                const curSpend = -( entries[`${c.id}|${monthIso(CURRENT_MONTH)}`] || 0)
+                const pct = target ? Math.min(999, Math.round((curSpend / target) * 100)) : null
+                const over = target != null && curSpend > target
                 return (
                   <tr key={c.id}>
                     <td style={{ position: 'sticky', left: 0, background: 'var(--card)' }}>
@@ -145,6 +185,24 @@ export default function Budget() {
                           </span>
                       }
                     </td>
+                    <td className="num">
+                      <input className="cell-input" inputMode="decimal" placeholder="—"
+                        defaultValue={target != null ? Math.round(target) : ''}
+                        key={`target-${c.id}-${target}`}
+                        onBlur={e => { if (e.target.value !== (target != null ? String(Math.round(target)) : '')) setTarget(c.id, e.target.value) }} />
+                    </td>
+                    {isCurrentYear && (
+                      <td className="num">
+                        {target ? (
+                          <div title={`${fmtUSD(curSpend)} of ${fmtUSD(target)}`} style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                            <span style={{ fontSize: 11.5, color: over ? 'var(--clay)' : 'var(--ink-soft)', minWidth: 32, textAlign: 'right' }}>{pct}%</span>
+                            <div style={{ width: 56, height: 6, borderRadius: 3, background: 'var(--line)', overflow: 'hidden' }}>
+                              <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: over ? 'var(--clay)' : 'var(--forest)' }} />
+                            </div>
+                          </div>
+                        ) : <span className="muted">—</span>}
+                      </td>
+                    )}
                     {MONTHS.map((_, m) => {
                       const v = entries[`${c.id}|${monthIso(m)}`]
                       const isCurrent = m === CURRENT_MONTH && year === new Date().getFullYear()
@@ -164,12 +222,35 @@ export default function Budget() {
               })}
               <tr>
                 <td style={{ fontWeight: 600, position: 'sticky', left: 0, background: 'var(--card)' }}>Monthly net</td>
+                <td></td>{isCurrentYear && <td></td>}
                 {MONTHS.map((_, m) => {
                   const t = colTotal(m)
                   const isCurrent = m === CURRENT_MONTH && year === new Date().getFullYear()
                   return <td key={m} className={'num ' + (t < 0 ? 'neg' : t > 0 ? 'pos' : '')} style={{ fontWeight: 600, ...(isCurrent ? { background: '#e4ede7' } : {}) }}>{t ? fmtUSD(t) : '—'}</td>
                 })}
                 <td className={'num ' + (grandTotal < 0 ? 'neg' : 'pos')} style={{ fontWeight: 700 }}>{fmtUSD(grandTotal)}</td>
+                <td></td><td></td>
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 600, position: 'sticky', left: 0, background: 'var(--card)' }}>Total positive</td>
+                <td></td>{isCurrentYear && <td></td>}
+                {MONTHS.map((_, m) => {
+                  const t = colPosTotal(m)
+                  const isCurrent = m === CURRENT_MONTH && year === new Date().getFullYear()
+                  return <td key={m} className="num pos" style={{ fontWeight: 600, ...(isCurrent ? { background: '#e4ede7' } : {}) }}>{t ? fmtUSD(t) : '—'}</td>
+                })}
+                <td className="num pos" style={{ fontWeight: 700 }}>{fmtUSD(grandPosTotal)}</td>
+                <td></td><td></td>
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 600, position: 'sticky', left: 0, background: 'var(--card)' }}>Total negative</td>
+                <td></td>{isCurrentYear && <td></td>}
+                {MONTHS.map((_, m) => {
+                  const t = colNegTotal(m)
+                  const isCurrent = m === CURRENT_MONTH && year === new Date().getFullYear()
+                  return <td key={m} className="num neg" style={{ fontWeight: 600, ...(isCurrent ? { background: '#e4ede7' } : {}) }}>{t ? fmtUSD(t) : '—'}</td>
+                })}
+                <td className="num neg" style={{ fontWeight: 700 }}>{fmtUSD(grandNegTotal)}</td>
                 <td></td><td></td>
               </tr>
             </tbody>

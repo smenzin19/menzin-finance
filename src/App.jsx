@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
-import { TrendingUp, Wallet, PieChart, LogOut } from 'lucide-react'
+import { TrendingUp, Wallet, PieChart, Repeat, LogOut } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import Auth from './components/Auth'
 import NetWorth from './pages/NetWorth'
 import Accounts from './pages/Accounts'
 import Budget from './pages/Budget'
+import Recurring from './pages/Recurring'
 
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = loading
@@ -26,6 +27,7 @@ export default function App() {
         <NavLink to="/" end className="nav-link"><TrendingUp size={17}/> Net Worth</NavLink>
         <NavLink to="/accounts" className="nav-link"><Wallet size={17}/> Accounts</NavLink>
         <NavLink to="/budget" className="nav-link"><PieChart size={17}/> Budget</NavLink>
+        <NavLink to="/recurring" className="nav-link"><Repeat size={17}/> Recurring</NavLink>
         <div className="nav-spacer" />
         <button className="nav-link" style={{ border: 'none', background: 'none', textAlign: 'left' }}
           onClick={() => supabase.auth.signOut()}>
@@ -37,6 +39,7 @@ export default function App() {
           <Route path="/" element={<NetWorth />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/budget" element={<Budget />} />
+          <Route path="/recurring" element={<Recurring />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>

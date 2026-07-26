@@ -39,12 +39,14 @@ create table if not exists public.balance_snapshots (
 
 -- ---------- BUDGET CATEGORIES ----------
 create table if not exists public.budget_categories (
-  id         uuid primary key default gen_random_uuid(),
-  user_id    uuid not null references auth.users (id) on delete cascade,
-  name       text not null,
-  sort_order integer not null default 0,
-  created_at timestamptz not null default now()
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null references auth.users (id) on delete cascade,
+  name           text not null,
+  sort_order     integer not null default 0,
+  monthly_target numeric(14,2),  -- optional flat monthly spending target, same every month
+  created_at     timestamptz not null default now()
 );
+alter table public.budget_categories add column if not exists monthly_target numeric(14,2);
 
 -- ---------- BUDGET ENTRIES ----------
 -- A signed amount for one category in one month (first-of-month date).
