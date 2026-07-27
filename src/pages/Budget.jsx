@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Trash2, List } from 'lucide-react'
-import StatementImport from '../components/StatementImport'
+import StatementImport, { guessCategory, EXCLUDE_SENTINEL } from '../components/StatementImport'
 import RulesEditor from '../components/RulesEditor'
 import DrillDown from '../components/DrillDown'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts'
@@ -20,6 +20,8 @@ export default function Budget() {
   const [importing, setImporting] = useState(false)
   const [editingRules, setEditingRules] = useState(false)
   const [drillDown, setDrillDown] = useState(null)
+  const [backfilling, setBackfilling] = useState(false)
+  const [backfillMsg, setBackfillMsg] = useState(null)
 
   const monthIso = m => `${year}-${String(m + 1).padStart(2, '0')}-01`
 
@@ -56,6 +58,31 @@ export default function Budget() {
     if (!confirm('Delete this category and all its entries?')) return
     await supabase.from('budget_categories').delete().eq('id', id)
     load()
+  }
+
+  async function backfillCategories() {
+    setBackfilling(true)
+    setBackfillMsg(null)
+    const { data: rules } = await supabase.from('categorization_rules').select('*').order('sort_order')
+    const catNames = cats.map(c => c.name)
+    const { data: rows } = await supabase.from('imported_transactions').select('id, description').is('category', null)
+
+    const byDesc = {}
+    for (const r of rows || []) {
+      if (!byDesc[r.description]) byDesc[r.description] = []
+      byDesc[r.description].push(r.id)
+    }
+
+    let updated = 0
+    for (const [desc, ids] of Object.entries(byDesc)) {
+      const guess = guessCategory(desc, rules || [], catNames)
+      if (!guess || guess === EXCLUDE_SENTINEL || !catNames.includes(guess)) continue
+      const { error } = await supabase.from('imported_transactions').update({ category: guess }).in('id', ids)
+      if (!error) updated += ids.length
+    }
+
+    setBackfilling(false)
+    setBackfillMsg(`Categorized ${updated} of ${rows?.length ?? 0} previously-uncategorized transactions.`)
   }
 
   async function renameCat(id) {
@@ -111,7 +138,11 @@ export default function Budget() {
         <button className="btn" onClick={addCat}>Add category</button>
         <button className="btn ghost" onClick={() => setEditingRules(true)}>Edit rules</button>
         <button className="btn ghost" onClick={() => setImporting(true)}>↑ Import statement</button>
+        <button className="btn ghost" disabled={backfilling} onClick={backfillCategories}>
+          {backfilling ? 'Backfilling…' : 'Backfill categories'}
+        </button>
       </div>
+      {backfillMsg && <div className="banner info">{backfillMsg}</div>}
 
       <div className="card card-pad" style={{ marginBottom: 18 }}>
         <div className="section-title" style={{ marginBottom: 14 }}>Monthly net</div>

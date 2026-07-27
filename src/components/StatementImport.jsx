@@ -24,7 +24,7 @@ function parseDateToISO(dateStr) {
 
 export const EXCLUDE_SENTINEL = '__exclude__'
 
-function guessCategory(description, rules, catNames) {
+export function guessCategory(description, rules, catNames) {
   const lower = description.toLowerCase()
   for (const rule of rules) {
     const keywords = rule.keywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean)
